@@ -8,6 +8,7 @@ public interface IDeck
     bool IsEmpty { get; }
     void Shuffle();
     ICard Draw();
+    ICard Peek(int offset);
 }
 
 // Standard 52-card deck. Shuffle() rewinds the draw index, so the same
@@ -40,5 +41,12 @@ public class Deck : IDeck
     public ICard Draw(){
         if(IsEmpty) throw new InvalidOperationException("Deck is empty.");
         return cards[index++];
+    }
+
+    //Cheat Sheet :>
+    public ICard Peek(int offset){
+        int i = index + offset;
+        if(i < 0 || i >= cards.Count) return null;
+        return cards[i];
     }
 }

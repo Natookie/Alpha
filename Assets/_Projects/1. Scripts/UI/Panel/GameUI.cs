@@ -1,17 +1,14 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using Nova;
 
 // Wires the menu / gameplay / game-over panels to a GameSession.
 // Owns the CardView slots and decides which one gets the next card.
-
 public class GameUI : MonoBehaviour
 {
     [Header("GAME TWEAK")]
-    [SerializeField] private int cardCount = 10;
-
-    [Header("GAME OVER")]
-    [SerializeField] private float gameOverDelay = 2f;
+    [SerializeField] private GameData data;
 
     [Header("CARDS")]
     [SerializeField] private Transform cardParent;
@@ -35,12 +32,15 @@ public class GameUI : MonoBehaviour
 
     private GameSession session;
     private CardView[] views;
-    private int revealIndex;
+    private List<ICard> visible = new();
     private Coroutine returnToMenuRoutine;
 
+    public GameSession Session => session;
+
     void Awake(){
-        session = new GameSession(cardCount);
-        views = new CardView[cardCount];
+        var fsm = new GameStateMachine();
+        session = new GameSession(data, fsm, () => new Deck());
+        views = new CardView[data.cardShowCount];
 
         SpawnViews();
 
@@ -62,7 +62,7 @@ public class GameUI : MonoBehaviour
 
     void SpawnViews(){
         if(cardParent == null || cardPrefab == null) return;
-        for(int i = 0; i < cardCount; i++){
+        for(int i = 0; i < data.cardShowCount; i++){
             GameObject card = Instantiate(cardPrefab, cardParent);
             views[i] = card.GetComponent<CardView>();
             if(views[i] != null) views[i].Reveal(false);
@@ -76,7 +76,7 @@ public class GameUI : MonoBehaviour
         SetPanel(gameOverPanel, false);
         SetPanel(gameplayPanel, true);
 
-        revealIndex = 0;
+        visible.Clear();
         for(int i = 0; i < views.Length; i++)
             if(views[i] != null) views[i].Reveal(false);
 
@@ -89,23 +89,27 @@ public class GameUI : MonoBehaviour
         SetPanel(gameOverPanel, false);
     }
 
+    // GameSession sends the current card first, then one new card per guess.
+    // Keep only the last cardShowCount cards and rebind the slots from the tail.
     void OnCardsRevealed(ICard current, ICard next){
-        if(current != null && revealIndex == 0){
-            BindSlot(0, current);
-            revealIndex = 1;
+        if(current != null && visible.Count == 0) visible.Add(current);
+        if(next != null){
+            visible.Add(next);
+            while(visible.Count > data.cardShowCount) visible.RemoveAt(0);
         }
-        if(next != null && revealIndex < views.Length){
-            BindSlot(revealIndex, next);
-            revealIndex++;
-        }
+        RenderWindow();
     }
 
-    void BindSlot(int index, ICard card){
-        if(index < 0 || index >= views.Length) return;
-        CardView view = views[index];
-        if(view == null) return;
-        view.Bind(card);
-        view.Reveal(true);
+    void RenderWindow(){
+        for(int i = 0; i < views.Length; i++){
+            if(views[i] == null) continue;
+            if(i < visible.Count){
+                views[i].Bind(visible[i]);
+                views[i].Reveal(true);
+            }else{
+                views[i].Reveal(false);
+            }
+        }
     }
 
     void OnGameEnded(bool won){
@@ -121,7 +125,7 @@ public class GameUI : MonoBehaviour
         SetPanel(gameOverPanel, true);
 
         StopReturnRoutine();
-        returnToMenuRoutine = StartCoroutine(ReturnToMenuAfterDelay(gameOverDelay));
+        returnToMenuRoutine = StartCoroutine(ReturnToMenuAfterDelay(data.gameOverDelay));
     }
 
     IEnumerator ReturnToMenuAfterDelay(float delay){

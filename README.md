@@ -8,15 +8,15 @@ A small Unity card game in which the player predicts whether the next card has a
 2. Open the Unity project folder (the one containing `Assets`, `Packages`, and `ProjectSettings`).
 3. Let Unity resolve the packages listed in `Packages/manifest.json`. The project uses Nova UI assets included in `Assets/Nova`.
 4. In the Project window, open `Assets/_Projects/Scenes/SampleScene.unity`.
-5. Press **Play**. Use the start button, then choose **Higher** or **Lower** for each next card. The round ends when the configured number of cards is dealt or the player's health reaches zero.
+5. Press **Set Up Card**, then choose **Higher** or **Lower** for each next card. The round ends when the 52-card deck is empty (win) or the player's health reaches zero (lose).
 
-The sample scene configures `GameUI` to deal five cards. The `cardCount` field can be changed on the `GameUI` component in the Inspector.
+`GameUI` exposes `cardShowCount` (how many cards are visible at once, default `5`) and `gameOverDelay` (delay before returning to the menu after a round ends). Game rules — starting health, points per correct guess, damage per wrong guess, Ace-high comparison, and suit tiebreak — live on a `GameData` ScriptableObject, injected into `GameSession`.
 
 ## Code organization
 
 Scripts are grouped by responsibility under `Assets/_Projects/1. Scripts`:
 
-- **Game** — `GameSession` coordinates a round, `PlayerData` stores score and health, `GameStateMachine` manages state transitions, and `GameEvents` publishes presentation updates.
+- **Game** — `GameSession` coordinates a round, `PlayerData` stores score and health, `GameStateMachine` manages state transitions, `GameEvents` publishes presentation updates, and `GameData` (a ScriptableObject) holds tunable rules like starting health, points per correct guess, damage per wrong guess, and the Ace-high flag.
 - **Deck** — `Deck` implements `IDeck` and supplies a shuffled standard deck of `ICard` models.
 - **Card** — `CardModel` stores rank and suit; `CardView` binds a model to its card sprite and controls whether it is revealed.
 - **UI/Panel** — `GameUI` owns the session and menu/card/game-over flow; `HUDUI` listens for events and updates score, health, and remaining cards.
@@ -24,7 +24,11 @@ Scripts are grouped by responsibility under `Assets/_Projects/1. Scripts`:
 
 ## Architecture
 
-The gameplay model is kept separate from its Unity/Nova presentation. `GameSession` applies guesses, updates `PlayerData`, and raises `GameEvents`; UI components subscribe and render those changes. `GameUI` also translates button clicks into session actions. The state machine models the menu, gameplay, and game-over lifecycle; the menu panels themselves are currently switched directly by `GameUI`.
+The gameplay model is kept separate from its Unity/Nova presentation. `GameSession` is built from injected pieces, a `GameData` config asset, a `GameStateMachine`, and a `Func<IDeck>` deck factory, so no concrete dependencies are constructed inside the session. 
+
+It applies guesses, updates `PlayerData`, and raises `GameEvents`. UI components subscribe and render those changes. `GameUI` translates button clicks into session actions and toggles the menu, gameplay, and game-over panels directly.
+
+Card comparison lives in `CardModel.CompareValue` (rank, respecting `GameData.aceHigh`) and `CardModel.SuitWeight` (♣ > ♦ > ♥ > ♠). `GameSession.IsHigher` combines them. The state machine models the menu, gameplay, and game-over lifecycle; the menu panels themselves are currently switched directly by `GameUI`.
 
 ```mermaid
 classDiagram
@@ -44,6 +48,7 @@ classDiagram
         +GameStateMachine Fsm
         +StartNewGame()
         +GuessHigher(higher)
+        +IsHigher(a, b)
     }
     class PlayerData {
         +int Point
@@ -52,6 +57,15 @@ classDiagram
         +AddPoint(amount)
         +LoseHealth(amount)
         +Reset()
+    }
+    class GameData {
+        <<ScriptableObject>>
+        +int startingHealth
+        +int pointsPerCorrectGuess
+        +int damagePerWrongGuess
+        +bool aceHigh
+        +int cardShowCount
+        +float gameOverDelay
     }
     class GameStateMachine {
         +IGameState Current
@@ -85,17 +99,22 @@ classDiagram
         +Rank
         +Value
     }
-    class CardModel
+    class CardModel {
+        +CompareValue(card, data)
+        +SuitWeight(suit)
+    }
     class CardView
     class CoreButton
     class UIBlockAnimator
 
     GameUI --> GameSession : creates and invokes
+    GameUI --> GameData : passes in
     GameUI ..> GameEvents : subscribes
     HUDUI ..> GameEvents : subscribes
     GameSession --> PlayerData : owns
-    GameSession --> GameStateMachine : changes state
-    GameSession --> IDeck : draws from
+    GameSession --> GameStateMachine : injected
+    GameSession --> GameData : reads rules
+    GameSession --> IDeck : injected factory
     GameSession ..> GameEvents : raises
     GameStateMachine o--> IGameState : current
     IGameState <|.. MainMenuState
@@ -107,4 +126,3 @@ classDiagram
     CardView ..> ICard : displays
     CoreButton --> UIBlockAnimator : animates with
     GameUI --> CardView : creates and binds
-```

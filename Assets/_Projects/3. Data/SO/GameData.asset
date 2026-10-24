@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e35aa77f9928cfb43866acdba25b7f57, type: 3}
+  m_Name: GameData
+  m_EditorClassIdentifier: Assembly-CSharp::GameData
+  startingHealth: 10
+  pointsPerCorrectGuess: 3
+  damagePerWrongGuess: 1
+  aceHigh: 1
+  breakTiesBySuit: 1
+  tieResult: 0
+  gameOverDelay: 2
+  cardShowCount: 5
